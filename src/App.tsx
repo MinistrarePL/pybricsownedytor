@@ -4,13 +4,17 @@ import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { applyProfile, loadTemplate, resetWorkspace } from './blockly/blocks.ts';
 import { testDriveProgram, testTurnProgram, workspaceToPython } from './codegen.ts';
 import { BlocklyEditor } from './components/BlocklyEditor.tsx';
+import { GamepadPanel } from './components/GamepadPanel.tsx';
 import { WorkspaceNote } from './components/WorkspaceNote.tsx';
 import { ConfirmNewDialog } from './components/ConfirmNewDialog.tsx';
 import { ConnectCablesDialog, ModelsDialog } from './components/ModelsDialog.tsx';
 import { SettingsDialog, type TestKind } from './components/SettingsDialog.tsx';
+import { HubLogPanel } from './components/HubLogPanel.tsx';
 import { Toasts } from './components/Toasts.tsx';
-import { TopBar } from './components/TopBar.tsx';
+import { TopBar, type AppMode } from './components/TopBar.tsx';
+import { generateXboxDriveProgram, XBOX_SPEED_DEFAULT } from './xboxDrive.ts';
 import { bluetoothAvailable, useHub } from './hooks/useHub.ts';
+import { useHubLog } from './hooks/useHubLog.ts';
 import { useToasts } from './hooks/useToasts.ts';
 import { cloneProfile, getModel, type ModelTemplate } from './models/index.ts';
 import { loadRobot, resetToModelDefaults, sanitizeRobot, saveRobot } from './robot.ts';
@@ -23,7 +27,8 @@ const InstructionsPanel = lazy(async () => {
 
 export default function App() {
   const { toasts, notify, dismiss } = useToasts();
-  const hub = useHub(notify);
+  const log = useHubLog();
+  const hub = useHub(notify, log);
   const workspaceRef = useRef<WorkspaceSvg | null>(null);
   const workspaceAreaRef = useRef<HTMLDivElement | null>(null);
   const [robot, setRobot] = useState<RobotProfile>(loadRobot);
@@ -36,6 +41,8 @@ export default function App() {
     const initial = getModel(loadRobot().modelId);
     return Boolean(initial?.workspaceNote?.length);
   });
+  const [appMode, setAppMode] = useState<AppMode>(loadAppMode);
+  const [xboxSpeed, setXboxSpeed] = useState(XBOX_SPEED_DEFAULT);
 
   const model = getModel(robot.modelId);
   const modelName = model?.name ?? robot.name;
@@ -63,6 +70,33 @@ export default function App() {
     if (await hub.run(source)) {
       notify('Program wystartował!', 'success');
     }
+  };
+
+  const playGamepad = async () => {
+    if (!robot.driveBase) {
+      notify('Ten model nie jeździ. Wybierz model z kołami.', 'error');
+      log.append('error', 'Ten model nie jeździ. Wybierz Training Camp 2 albo inny model z kołami.');
+      return;
+    }
+    if (!hub.connected && !(await hub.connect())) {
+      return;
+    }
+    let source: string;
+    try {
+      source = generateXboxDriveProgram(robot, { maxSpeed: xboxSpeed });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error), 'error');
+      return;
+    }
+    if (await hub.run(source)) {
+      notify('Pilot wystartował. Poczekaj, aż pad się połączy.', 'success');
+      log.append('info', 'Czekam na pada Xbox. W logu pojawi się „Pad polaczony” albo błąd.');
+    }
+  };
+
+  const changeMode = (next: AppMode) => {
+    setAppMode(next);
+    saveAppMode(next);
   };
 
   const saveSettings = (next: RobotProfile) => {
@@ -112,7 +146,9 @@ export default function App() {
         bluetooth={bluetoothAvailable}
         hasInstructions={pdfs.length > 0}
         instructionsOpen={instructionsOpen}
-        onPlay={() => void play()}
+        mode={appMode}
+        onMode={changeMode}
+        onPlay={() => void (appMode === 'gamepad' ? playGamepad() : play())}
         onNew={() => setConfirmNew(true)}
         onSettings={() => setSettingsOpen(true)}
         onModels={() => setModelsOpen(true)}
@@ -131,7 +167,7 @@ export default function App() {
       )}
 
       <main className="relative isolate flex min-h-0 flex-1">
-        <div ref={workspaceAreaRef} className="relative min-h-0 min-w-0 flex-1">
+        <div ref={workspaceAreaRef} className={`relative min-h-0 min-w-0 flex-1 ${appMode === 'gamepad' ? 'hidden' : ''}`}>
           <BlocklyEditor profile={robot} onReady={onWorkspace} />
           {workspaceNoteOpen && model?.workspaceNote && model.workspaceNote.length > 0 && (
             <WorkspaceNote
@@ -143,6 +179,17 @@ export default function App() {
             />
           )}
         </div>
+        {appMode === 'gamepad' && (
+          <div className="relative min-h-0 min-w-0 flex-1">
+            <GamepadPanel
+              robot={robot}
+              modelName={modelName}
+              maxSpeed={xboxSpeed}
+              onMaxSpeed={setXboxSpeed}
+              onOpenModels={() => setModelsOpen(true)}
+            />
+          </div>
+        )}
         {instructionsOpen && pdfs.length > 0 && (
           <Suspense
             fallback={
@@ -155,6 +202,8 @@ export default function App() {
           </Suspense>
         )}
       </main>
+
+      <HubLogPanel log={log} />
 
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
@@ -191,4 +240,22 @@ export default function App() {
       />
     </div>
   );
+}
+
+const MODE_KEY = 'pybrics-app-mode';
+
+function loadAppMode(): AppMode {
+  try {
+    return sessionStorage.getItem(MODE_KEY) === 'gamepad' ? 'gamepad' : 'blocks';
+  } catch {
+    return 'blocks';
+  }
+}
+
+function saveAppMode(mode: AppMode): void {
+  try {
+    sessionStorage.setItem(MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
 }

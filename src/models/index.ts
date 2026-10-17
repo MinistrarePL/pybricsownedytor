@@ -2,12 +2,13 @@ import { advancedUpgradeModel } from './advancedUpgrade.ts';
 import { robotModel } from './robot.ts';
 import { sejfModel } from './sejf.ts';
 import { superSejfModel } from './superSejf.ts';
+import { trainingCamp2Model } from './trainingCamp2.ts';
 import type { ModelTemplate } from './types.ts';
 import type { RobotProfile } from '../types.ts';
 
 export type { ModelTemplate, PdfPart } from './types.ts';
 
-export const MODELS: ModelTemplate[] = [robotModel, advancedUpgradeModel, sejfModel, superSejfModel];
+export const MODELS: ModelTemplate[] = [robotModel, trainingCamp2Model, advancedUpgradeModel, sejfModel, superSejfModel];
 
 export function getModel(id: string): ModelTemplate | undefined {
   return MODELS.find((model) => model.id === id);

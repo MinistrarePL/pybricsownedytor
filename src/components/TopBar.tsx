@@ -1,6 +1,8 @@
-import { Bluetooth, BookOpen, Bot, Boxes, FilePlus, LoaderCircle, Play, Settings, Square, Unplug } from 'lucide-react';
+import { Bluetooth, BookOpen, Bot, Boxes, FilePlus, Gamepad2, LoaderCircle, Play, Puzzle, Settings, Square, Unplug } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { HubControls } from '../hooks/useHub.ts';
+
+export type AppMode = 'blocks' | 'gamepad';
 
 interface Props {
   hub: HubControls;
@@ -9,6 +11,8 @@ interface Props {
   bluetooth: boolean;
   hasInstructions: boolean;
   instructionsOpen: boolean;
+  mode: AppMode;
+  onMode: (mode: AppMode) => void;
   onPlay: () => void;
   onNew: () => void;
   onSettings: () => void;
@@ -23,6 +27,8 @@ export function TopBar({
   bluetooth,
   hasInstructions,
   instructionsOpen,
+  mode,
+  onMode,
   onPlay,
   onNew,
   onSettings,
@@ -46,6 +52,23 @@ export function TopBar({
 
       <div className="flex-1" />
 
+      <div className="flex rounded-2xl bg-slate-100 p-1">
+        <ModeButton
+          label="Klocki"
+          active={mode === 'blocks'}
+          onClick={() => onMode('blocks')}
+        >
+          <Puzzle className="size-4" strokeWidth={2.4} />
+        </ModeButton>
+        <ModeButton
+          label="Pilot pada"
+          active={mode === 'gamepad'}
+          onClick={() => onMode('gamepad')}
+        >
+          <Gamepad2 className="size-4" strokeWidth={2.4} />
+        </ModeButton>
+      </div>
+
       <HubButton hub={hub} bluetooth={bluetooth} />
 
       <div className="flex items-center gap-2">
@@ -55,9 +78,11 @@ export function TopBar({
         <IconButton label="Instrukcja budowania" onClick={onInstructions} disabled={!hasInstructions} active={instructionsOpen}>
           <BookOpen className="size-6" strokeWidth={2.2} />
         </IconButton>
-        <IconButton label="Nowy program" onClick={onNew}>
-          <FilePlus className="size-6" strokeWidth={2.2} />
-        </IconButton>
+        {mode === 'blocks' && (
+          <IconButton label="Nowy program" onClick={onNew}>
+            <FilePlus className="size-6" strokeWidth={2.2} />
+          </IconButton>
+        )}
         <IconButton label="Ustawienia robota" onClick={onSettings}>
           <Settings className="size-6" strokeWidth={2.2} />
         </IconButton>
@@ -70,7 +95,7 @@ export function TopBar({
           type="button"
           onClick={onPlay}
           disabled={!bluetooth || hub.uploading || hub.connecting}
-          title="Uruchom program"
+          title={mode === 'gamepad' ? 'Uruchom pilota' : 'Uruchom program'}
           className="grid size-15 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_5px_0_#047857] transition hover:bg-emerald-400 active:translate-y-[5px] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {hub.uploading ? (
@@ -90,6 +115,31 @@ export function TopBar({
         </button>
       </div>
     </header>
+  );
+}
+
+function ModeButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-extrabold transition ${
+        active ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+      }`}
+    >
+      {children}
+      {label}
+    </button>
   );
 }
 
